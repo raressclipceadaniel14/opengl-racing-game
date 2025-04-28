@@ -4,6 +4,7 @@
 #include "../GameTime.h"
 #include "Terrain.h"
 
+#include "Collision.h"
 #include <algorithm>
 #include <cmath>
 
@@ -84,6 +85,8 @@ float Player::getSteer() const {
     return steerAngle;
 }
 
+extern std::vector<Entity*> entities;
+
 bool Player::update() {
     steerAngle = smoothSteering(steerChange);
     float dt = GameTime::getGameTime()->getDt();
@@ -105,80 +108,63 @@ bool Player::update() {
         dz = distance * glm::cos(m_y_rot);
     } else {
         /* Following is code from #1 and adapted to this program */
-        // Pre-calc heading vector
         float sn = sin(m_y_rot);
         float cs = cos(m_y_rot);
 
-        // Get velocity in local car coordinates
         velocity_c.y = cs * velocity.y + sn * velocity.x;
         velocity_c.x = cs * velocity.x - sn * velocity.y;
 
-        // Weight on axles based on centre of gravity and weight shift due to forward/reverse acceleration
         float axleWeightFront =
             mass * (axleWeightRatioFront * gravity - weightTransfer * accel_c.y * cgHeight / wheelBase);
         float axleWeightRear =
             mass * (axleWeightRatioRear * gravity + weightTransfer * accel_c.y * cgHeight / wheelBase);
 
-        // Resulting velocity of the wheels as result of the yaw rate of the car body.
-        // v = yawrate * r where r is distance from axle to CG and yawRate (angular velocity) in rad/s.
         float yawSpeedFront = cgToFrontAxle * yawRate;
         float yawSpeedRear = -cgToRearAxle * yawRate;
 
-        // Calculate slip angles for front and rear wheels (a.k.a. alpha)
         float slipAngleFront = atan2(velocity_c.x + yawSpeedFront, abs(velocity_c.y)) - sgn(velocity_c.y) * steerAngle;
         float slipAngleRear = atan2(velocity_c.x + yawSpeedRear, abs(velocity_c.y));
 
         float tireGripFront = tireGrip;
-        float tireGripRear = tireGrip * (1.f - ebrake_input * (1.f - lockGrip));  // reduce rear grip when ebrake is on
+        float tireGripRear = tireGrip * (1.f - ebrake_input * (1.f - lockGrip));
 
         float frictionForceFront_cy =
             std::clamp(-cornerStiffnessFront * slipAngleFront, -tireGripFront, tireGripFront) * axleWeightFront;
         float frictionForceRear_cy =
             std::clamp(-cornerStiffnessRear * slipAngleRear, -tireGripRear, tireGripRear) * axleWeightRear;
 
-        //  Get amount of brake/throttle from our inputs
         float brake = std::min(brake_input * brakeForce + ebrake_input * eBrakeForce, brakeForce);
         float throttle = throttle_input * engineForce;
 
-        //  Resulting force in local car coordinates.
-        //  is implemented as a RWD car only.
         float tractionForce_cx = throttle - brake * sgn(velocity_c.y);
         float tractionForce_cy = 0;
 
         float dragForce_cx = -rollResist * velocity_c.y - airResist * velocity_c.y * abs(velocity_c.y);
         float dragForce_cy = -rollResist * velocity_c.x - airResist * velocity_c.x * abs(velocity_c.x);
 
-        // total force in car coordinates
         float totalForce_cx = dragForce_cx + tractionForce_cx;
         float totalForce_cy =
             dragForce_cy + tractionForce_cy + cos(steerAngle) * frictionForceFront_cy + frictionForceRear_cy;
 
-        // acceleration along car axes
-        accel_c.y = totalForce_cx / mass;  // forward/reverse accel
-        accel_c.x = totalForce_cy / mass;  // sideways accel
+        accel_c.y = totalForce_cx / mass;
+        accel_c.x = totalForce_cy / mass;
 
-        // acceleration in world coordinates
         accel.y = cs * accel_c.y - sn * accel_c.x;
         accel.x = sn * accel_c.y + cs * accel_c.x;
 
-        // update velocity
         velocity.y += accel.y * dt;
         velocity.x += accel.x * dt;
 
         absVel = length(velocity);
 
-        // Slow the car down when no throttle, the overall equation doesn't seem to do this very well.
         if (throttle < 0.5f) {
             velocity = velocity - (velocity * 0.5f * dt);
         }
 
-        // calculate rotational forces
         float angularTorque =
             (frictionForceFront_cy + tractionForce_cy) * cgToFrontAxle - frictionForceRear_cy * cgToRearAxle;
-
         float angularAccel = angularTorque / inertia;
 
-        //  Sim gets unstable at very slow speeds, so just stop the car
         if (abs(absVel) < 2.0f && throttle < 0.5f) {
             velocity.y = 0.0f;
             velocity.x = 0.0f;
@@ -191,30 +177,48 @@ bool Player::update() {
             dx = velocity.x * dt;
             dz = velocity.y * dt;
         }
-        /* End code from #1 */
     }
 
-    // Wrap rotation around once it reaches 2*pi
     if (m_y_rot > (float)constants::PI * 2) {
         m_y_rot -= constants::PI * 2;
     } else if (m_y_rot < (float)-constants::PI * 2) {
         m_y_rot += constants::PI * 2;
     }
 
-    // Assumes constant scale
     float player_length = (abs(m_model->getRangeInDim(2).second - m_model->getRangeInDim(2).first)) / 2.0f * m_scale.x;
     float player_length_x = player_length * glm::sin(m_y_rot);
     float player_length_z = player_length * glm::cos(m_y_rot);
 
-    // Currently, acceleration and velocity are maintained on collision with edge.
-    // TODO zero velocity and acceleration on FIRST collision in incident, so as to allow escaping the wall
     if (terrain->isOnTerrain(m_position.x + dx + player_length_x, m_position.z + dz + player_length_z)) {
+        // 1. Move the player first
         move(glm::vec3(dx, 0, dz));
         placeBottomEdge(terrain->getHeight(getPosition().x, getPosition().z));
         setRotationX(terrain->getAngleX(getPosition().x, getPosition().z, getRotationY()));
         setRotationZ(terrain->getAngleZ(getPosition().x, getPosition().z, getRotationY()));
+
+        // 2. COLLISION CHECK after move
+        AABB playerBox = getBoundingBox();
+        for (Entity* entity : entities) {
+            if (entity == this)
+                continue;
+            AABB obstacleBox = entity->getBoundingBox();
+            if (checkCollision(playerBox, obstacleBox)) {
+                std::cout << "Collision with object!" << std::endl;
+
+                move(glm::vec3(-dx, 0, -dz));
+
+                if (!basic_controls) {
+                    velocity = glm::vec2(0.f);
+                    accel = glm::vec2(0.f);
+                }
+
+                break;
+            }
+        }
+
         return true;
     }
+
     return false;
 }
 

@@ -75,7 +75,7 @@ find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 
-add_executable(opengl-car-game ${all_sources} ${all_headers})
+add_executable(opengl-car-game ${all_sources} ${all_headers} "Collision.h")
 target_link_libraries(opengl-car-game PRIVATE glad::glad OpenGL::GL glfw fmt::fmt stb_image tiny_obj_loader ${CMAKE_DL_LIBS})
 target_include_directories(opengl-car-game PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 

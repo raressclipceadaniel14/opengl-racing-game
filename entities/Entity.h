@@ -10,6 +10,11 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
+struct AABB {
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
 class Entity {
   protected:
     const Model* m_model;
@@ -23,6 +28,8 @@ class Entity {
   public:
     Entity(const Model* model);
     Entity();
+
+    AABB getBoundingBox() const;
 
     virtual ~Entity() = default;
 

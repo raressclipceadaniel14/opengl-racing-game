@@ -19,6 +19,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
 
+std::vector<Entity*> entities;
+
 using namespace glm;
 
 constexpr float SKYBOX_SIZE = 200.0f;
@@ -103,9 +105,7 @@ int main(int argc, char** argv) {
     Model coneModel = Loader::getLoader()->loadModel("res/cone/cone2_obj.obj");
     Model treeModel = Loader::getLoader()->loadModel("res/tree/PineTree03.obj");
     Model stumpModel = Loader::getLoader()->loadModel("res/stump/TreeStump03.obj");
-
-    // Vector to hold all of the world entities.
-    std::vector<Entity*> entities;
+    
     // Vector to hold lights
     std::vector<Light*> lights;
 

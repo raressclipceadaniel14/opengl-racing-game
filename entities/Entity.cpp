@@ -126,3 +126,14 @@ glm::mat4 Entity::calculateRotationMatrix(float xRot, float yRot, float zRot) {
 
     return rotation;
 }
+
+AABB Entity::getBoundingBox() const {
+    AABB box;
+    box.min.x = m_position.x + m_model->getRangeInDim(0).first * m_scale.x;
+    box.max.x = m_position.x + m_model->getRangeInDim(0).second * m_scale.x;
+    box.min.y = m_position.y + m_model->getRangeInDim(1).first * m_scale.y;
+    box.max.y = m_position.y + m_model->getRangeInDim(1).second * m_scale.y;
+    box.min.z = m_position.z + m_model->getRangeInDim(2).first * m_scale.z;
+    box.max.z = m_position.z + m_model->getRangeInDim(2).second * m_scale.z;
+    return box;
+}

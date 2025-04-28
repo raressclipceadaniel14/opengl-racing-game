@@ -7,10 +7,10 @@
             "inheritEnvironments": [ "msvc_x64_x64" ],
             "buildRoot": "${projectDir}\\out\\build\\${name}",
             "installRoot": "${projectDir}\\out\\install\\${name}",
-            "cmakeCommandArgs": "",
+            "cmakeCommandArgs": "physics",
             "buildCommandArgs": "",
             "ctestCommandArgs": "",
-            "cmakeToolchain": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            "cmakeToolchain": "D:/vcpkg/scripts/buildsystems/vcpkg.cmake"
         }
     ]
 }
